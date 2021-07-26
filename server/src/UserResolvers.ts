@@ -1,7 +1,10 @@
-import { Resolver, Query, Mutation, Arg, ObjectType, Field } from 'type-graphql'
+import { Resolver, Query, Mutation, Arg, ObjectType, Field, Ctx, UseMiddleware } from 'type-graphql'
 import { hash, compare } from 'bcryptjs';
-import { sign } from 'jsonwebtoken'
 import { User } from './entity/User';
+import { MyContext } from './MyContext';
+import { createAccessToken, createRefreshToken } from './auth';
+import { isAuth } from './isAuth';
+import { sendRefreshToken } from './sendRefreshToken';
 
 @ObjectType()
 class LoginResponse {
@@ -15,6 +18,15 @@ export class UserResolver {
     hello() {
         return 'hi!'
     }
+    @Query(() => String)
+    @UseMiddleware(isAuth)
+    bye(
+        @Ctx() {payload}: MyContext
+    ) {
+        console.log(payload);
+        return `your user id is: ${payload!.userID}`;
+    }
+
     @Query(() => [User])
     users() {
         return User.find();
@@ -24,7 +36,8 @@ export class UserResolver {
     @Mutation(() => LoginResponse)
     async login(
         @Arg("email") email: string,
-        @Arg("password") password: string
+        @Arg("password") password: string,
+        @Ctx() {res} : MyContext
     ): Promise<LoginResponse> {
         const user = await User.findOne({where: { email } });
         if (!user) {
@@ -35,10 +48,12 @@ export class UserResolver {
         if (!valid) {
             throw new Error ("bad password");
         }
-        //login verified  
+        //login verified 
+        
+        sendRefreshToken(res, createRefreshToken(user));
 
         return {
-            accessToken: sign({ userID: user.id, }, "fdkasjfheunasf", { expiresIn: "15m" })
+            accessToken: createAccessToken(user)
         };          
     }
 
