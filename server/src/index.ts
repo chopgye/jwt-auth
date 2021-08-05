@@ -15,7 +15,8 @@ import { sendRefreshToken } from './sendRefreshToken';
     const app = express();
     app.use(cookieParser())
     app.get('/', (_req, res) => res.send("hello"));
-    //sepeate from graphql
+    
+    //sepeate from graphql for security 
     app.post("/refresh_token", async (req, res) => {
         const token = req.cookies.jid
         if (!token) {
@@ -24,6 +25,7 @@ import { sendRefreshToken } from './sendRefreshToken';
         
         let payload: any = null;
         try {
+            //check to see if its signed by the correct secret
             payload = verify(token, process.env.REFRESH_TOKEN_SECRET!)
 
         } catch(err) {
@@ -31,13 +33,18 @@ import { sendRefreshToken } from './sendRefreshToken';
             return res.send({ ok: false, accessToken: ''})
         }
 
-        //token is valid and we can send back a new access token 
+        //token is valid and send back a new access token 
         const user = await User.findOne({id: payload.userID });
 
         if (!user) {
             return res.send({ ok: false, accessToken: ''})
         }
 
+         
+        if (user.tokenVersion !== payload.tokenVersion ) {
+            return res.send({ ok: false, accessToken: ''})
+        }
+        
         //refresh the refresh token
         sendRefreshToken(res, createRefreshToken(user))
         
